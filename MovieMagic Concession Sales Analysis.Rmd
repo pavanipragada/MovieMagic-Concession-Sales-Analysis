@@ -1,0 +1,296 @@
+---
+title: "Business Decision Algorithms_Final Project"
+author: "Pavani Pragada, Sushma Sree Mutyapu, Sai Anogna Chittudi"
+date: "26 October'2023"
+output:
+  pdf_document: default
+  html_document: default
+---
+## Introduction and Project Goal
+
+MovieMagic, a regional movie chain, aims to boost concession sales with a data-driven approach. Leveraging 2000 customer profiles and 75 reviews, the project focuses on interpretation, prediction, and text analysis. Using linear and penalized regression, it seeks to identify influential factors in concession spending and refine predictions. Simultaneously, customer sentiment is explored through text analysis. By implementing these strategies, MovieMagic intends to optimize concession sales and customer experiences, making informed decisions that enhance both profitability and customer satisfaction.
+
+**Regression analysis**
+
+```{r, warning=FALSE, message=FALSE}
+# install libraries
+library(dplyr)
+library(car)
+library(caret)
+library(ggplot2)
+library(tidytext)
+library(tidyr)
+library(RTextTools)
+library(wordcloud)
+library(tm)
+library(stringr)
+library(quanteda)
+library(reshape2)
+library(quanteda.textplots)
+library(topicmodels)
+
+# Read in the data
+data1 <- read.csv("http://data.mishra.us/files/project_data.csv")
+```
+
+## Description of the Data
+
+The dataset comprises information from 2000 customers of MovieMagic, a movie chain, including both loyalty program members and non-members. Key variables include customer age, job category, streaming subscriptions, education level, whether the movie was seen alone, receipt of discount coupons, days since becoming a MovieMagic member, movies seen, and the outcome variable: amount spent on concessions. In the data, 4 of the variables are categorical which needs to be factored appropriately.
+
+```{r, warning=FALSE, message=FALSE}
+# factoring the categorical variables
+data1$discount <- as.factor(data1$discount)
+data1$seen_alone <- as.factor(data1$seen_alone)
+data1$job <- as.factor(data1$job)
+data1$education <- as.factor(data1$education)
+```
+
+
+# Q1. Linear Regression Model and checking the MultiCollinearity using VIF
+
+```{r, warning=FALSE, message=FALSE}
+model1<- lm(amount_spent~., data=data1)
+summary(model1)
+```
+
+```{r}
+# Check for multicollinearity using VIF
+vif(model1)
+```
+> After fitting a Linear Regression Model,it is observed that the predictors "age," "streaming," "days_member," and "movies_seen" are statistically significant having p-value less than 0.05 and have a significant influence on the amount spent on concessions. For finding the multi-collinearity we will further check the VIF. Variance Inflation Factor (VIF) is used to quantify the level of multicollinearity. VIF is a metric that helps in determining inflated variance of the beta coefficient for a specific predictor variable because of multicollinearity among the predictor variables.
+
+> It is observed that GVIF values are presented in the output as there are some categorical variables in the given data. So, we need to check if any of the GVIF is greater than 2 to check for Multicollinearity. For the output we can observe that the variables 'job' and 'education' have GVIF values more than 2 which indicates that these two variables are presenting the Multicollinearity into the data. The other varaibles other than those 2 variables have GVIF values little above 1 so doesn't present much Multicollinearity into the data.
+
+> From the output of linear regression, we can see that the predictors 'age', 'streaming' , 'days_member' and 'movies_seen' are having the low P-value(p<0.05) which makes them as the significant predictors for including in the regression model.
+
+
+
+# Q2. Penalized Regression
+```{r, warning=FALSE, message=FALSE}
+# Load the glmnet package
+library(glmnet)
+
+# Create a matrix of predictors
+X <- as.matrix(data1[, -which(names(data1) == "amount_spent")])
+
+# Create a vector of the outcome variable
+y <- data1$amount_spent
+
+# Fit a Lasso regression model
+lasso_model <- glmnet(X, y, alpha=1)
+
+# Find the optimal lambda value using cross-validation
+cv_lasso_model <- cv.glmnet(X, y, alpha=1)
+
+# Print the optimal lambda value
+print(cv_lasso_model$lambda.min)
+
+# Fit the Lasso model with the optimal lambda
+lasso_model_optimal <- glmnet(X, y, alpha=1, lambda=cv_lasso_model$lambda.min)
+
+# Print the coefficients
+coef(lasso_model_optimal)
+
+```
+
+> Positive Influence Predictors - The predictors with positive influence are 'age', 'days_member' and 'movies_seen' as the values are positive in the LASSO model
+
+> Negative Influence Predictors -The predictors with negative influence is only one which is 'streaming'. This is having a -0.7511 value in LASSO model.
+
+> The positive and negative influence predictors can be identified from both Linear regression and Penalized regression but when we select from the penalized regression we get the exact positive or negative direction of the siginificant predictors since penalized regression reduces the other multicollinear elements are reduced and the impact of multicollinarity is also reduced so exact influence is identified. We haven't explored the neural net model as that complex model is not needed for this data where we can find the significant predictors easily from the regression models.
+
+
+# Q3 
+
+```{r, warning=FALSE, message=FALSE}
+# Fit a Ridge regression model
+ridge_model <- glmnet(X, y, alpha=0)
+
+# Find the optimal lambda value using cross-validation
+cv_ridge_model <- cv.glmnet(X, y, alpha=0)
+
+# Print the optimal lambda value
+print(cv_ridge_model$lambda.min)
+
+# Fit the Ridge model with the optimal lambda
+ridge_model_optimal <- glmnet(X, y, alpha=0, lambda=cv_ridge_model$lambda.min)
+
+# Print the coefficients
+coef(ridge_model_optimal)
+
+```
+> Both linear regression and penalized regression has helped to select relevent variables. From the linear regression we have found the predictors which significantly impact the model with p-value less than 0.05. From the Penalized regression model we can see which predictors have significant impact by reducing the beta coefficients of the other predictors to zero or near zero depending on the type of model(LASSO/Ridge).
+
+> So from both the regressions we got the same 4 predictors as the relevent variables for creating the analytic model which are 'age', 'streaming', 'days_member' and 'movies_seen'. Yes, Both LASSO and Ridge regressions will help in selecting the predicting model the only difference being that the LASSO will make the non-significant predictors beta coefficients as zero where as Ridge will just reduce the beta coefficent values without making them as zero. 
+
+# Q4
+
+```{r}
+#Linear regression with 4 selected predictors
+model2<- lm(amount_spent~age+streaming+days_member+movies_seen, data=data1)
+summary(model2)
+```
+
+Train/Test Split = 70/30
+**Predictive model**
+The analysis was run by splitting the data........
+```{r, warning=FALSE, message=FALSE}
+ 
+set.seed(1234)
+split_70_30 <- createDataPartition(data1$amount_spent, p = 0.7, list=FALSE) 
+trainData_70_30 <- data1[split_70_30,]
+testData_70_30 <- data1[-split_70_30,]
+
+
+# Make predictions using the linear regression model
+predictions_70_30 <- predict(model2, testData_70_30)
+
+# Calculate RMSE
+rmse_70_30 <- sqrt(mean((testData_70_30$amount_spent - predictions_70_30)^2))
+
+# Calculate R-squared
+rsquared_70_30 <- 1 - (sum((testData_70_30$amount_spent - predictions_70_30)^2) / sum((testData_70_30$amount_spent - mean(testData_70_30$amount_spent))^2))
+
+# Calculate MAE
+mae_70_30 <- mean(abs(testData_70_30$amount_spent - predictions_70_30))
+
+# Print RMSE and R-squared
+cat("RMSE:", rmse_70_30, "\n")
+cat("R-squared:", rsquared_70_30, "\n")
+cat("Mean Absolute Error (MAE):", mae_70_30, "\n")
+```
+
+Train/Test Data - 80/20 
+```{r}
+set.seed(1234)
+datasplit_80_20 <- createDataPartition(data1$amount_spent, p = 0.8, list=FALSE) 
+trainData_80_20 <- data1[datasplit_80_20,]
+testData_80_20<- data1[-datasplit_80_20,]
+
+
+# Make predictions using the linear regression model
+predictions_80_20 <- predict(model2, testData_80_20)
+
+# Calculate RMSE
+rmse_80_20 <- sqrt(mean((testData_80_20$amount_spent - predictions_80_20)^2))
+
+# Calculate R-squared
+rsquared_80_20 <- 1 - (sum((testData_80_20$amount_spent - predictions_80_20)^2) / sum((testData_80_20$amount_spent - mean(testData_80_20$amount_spent))^2))
+
+# Calculate MAE
+mae_80_20 <- mean(abs(testData_80_20$amount_spent - predictions_80_20))
+
+# Print RMSE and R-squared
+cat("RMSE for 80/20 split Data:", rmse_80_20, "\n")
+cat("R-squared for 80/20 split Data:", rsquared_80_20, "\n")
+cat("Mean Absolute Error (MAE) for 80/20 split Data:", mae_80_20, "\n")
+```
+
+> It is observed that R squared value for 80/20 split is more than 70/30 split data.Similarly,MAE and RMSE-error values are less for 80/20 split data than 70/30 split. As more data is being available for model in the 80/20 split the error is being reduced and also the percentage of the variation is also being explained which we can say the increate in the R-squared value from the 70/30 to 80/20 Split. 
+So, it is clear that the model performs better on the training set with an 80-20 split because it has more data for training. 
+
+
+# Q5
+
+> From the model 2 that we have created using the selected predictors we can see that the coefficient value is high for 'streaming' variable compared to other predictor variables which is -0.7920. The negative indicates that the predictor has negative influence on the target variable which is the amount spent. This is also very logical as when a person is paying more for streaming platforms then they spend less in movie theater as most of the movies can be watched at the comfort of home. The strategy that can be used for these customers is give special offers on movie tickets along with food coupons to encorage them to come and experience the movie on a large screen. 
+
+> The next large predictor is 'movies_seen' with coefficient value of 0.4988. This indicates having the positive influence on the target variable. Since these customers are already intrested in movies we can simply provide them with few loyality reward programs to provide encouragement to continue to watch more movies in MovieMagic rather than at the competition. The other positive factor is the 'age' predictor with 0.1928 coefficient value. From this the strategy that can be formed is that providing more offers for older customers who tend to spend more amount on the concessions. The last predictor which have the positive influence on the output is 'days_member' with a coefficient of 0.0499. We use this predictor also when planning for the loyality program along with the 'movies_seen' predictor. 
+
+
+# Q6
+**Text Analysis**
+
+```{r, warning=FALSE, message=FALSE}
+
+# Read the data
+text <- read.csv(url('http://data.mishra.us/files/project_reviews.csv'))
+
+# Assign "Negative" to text$valence for ratings 1, 2
+text$valence[text$star %in% c(1, 2)] <- "Negative"
+
+# Assign "Positive" to text$valence for ratings 3, 4, and 5
+text$valence[text$star %in% c(3, 4, 5)] <- "Positive"
+
+# Create a Corpus for positive and negative reviews
+positive_corpus <- Corpus(VectorSource(text$text[text$valence == "Positive"]))
+negative_corpus <- Corpus(VectorSource(text$text[text$valence == "Negative"]))
+
+# Preprocess the text
+positive_corpus <- tm_map(positive_corpus, content_transformer(tolower))
+negative_corpus <- tm_map(negative_corpus, content_transformer(tolower))
+positive_corpus <- tm_map(positive_corpus, removePunctuation)
+negative_corpus <- tm_map(negative_corpus, removePunctuation)
+positive_corpus <- tm_map(positive_corpus, removeNumbers)
+negative_corpus <- tm_map(negative_corpus, removeNumbers)
+positive_corpus <- tm_map(positive_corpus, removeWords, stopwords("english"))
+negative_corpus <- tm_map(negative_corpus, removeWords, stopwords("english"))
+positive_corpus <- tm_map(positive_corpus, stripWhitespace)
+negative_corpus <- tm_map(negative_corpus, stripWhitespace)
+
+# Create word clouds for positive and negative reviews
+wordcloud(positive_corpus, scale=c(3, 0.5), max.words=100, random.order=FALSE, colors="blue")
+wordcloud(negative_corpus, scale=c(3, 0.5), max.words=100, random.order=FALSE, colors="red")
+
+```
+
+
+> By seeing the positive and negative reviews word clouds we can see that 'Food' is the most prominent word in both the clouds. Other than that word the most prominent words in the negative word cloud is hour, order, movie, meal and more which actually represents more about th food and service of the food in the theater rather than about the movie experience. The words in the positive reviews cloud are place, movie, cinema, fun, good, love and more which actually explains the experience of watching a movie at the MovieMagic is good and fun. 
+
+> From both the word clouds and also the regression output it is clear that streaming is having a negative influence on the concession sales. So from this we can craft a custom message to customers by emphasizing the advantages of watching a movie at a theater compared to streaming at home concentrating more on how it will be fun and exciting to watch a movie at theater with friends or family. 
+
+
+# Q7
+
+```{r}
+
+# first remove stop words
+corpus <- VCorpus(VectorSource(text$text))
+# a function to clean /,@,\\,|
+toSpace <- content_transformer(function(x, pattern)gsub(pattern, " ", x)) 
+corpus <- tm_map(corpus, toSpace, "/|@|\\|")
+corpus<- tm_map(corpus, stripWhitespace) # remove white space
+# covert all to lower case else same word as lower and uppercase will classified as different
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers) # remove numbers
+corpus <- tm_map(corpus, removePunctuation) # remove punctuations
+corpus <- tm_map(corpus, removeWords, stopwords("en")) 
+dtm <- DocumentTermMatrix(corpus)
+set.seed(234)
+rowTotals <- apply(dtm , 1, sum) 
+dtm <- dtm[rowTotals> 0, ]
+lda <- LDA(dtm, k = 3, method = "Gibbs", control = NULL)
+topics <- tidy(lda, matrix = "beta") # beta is the topic-word density
+
+top_terms <- topics %>%
+group_by(topic) %>%
+top_n(10, beta) %>% # top_n picks 10 topics.
+ungroup() %>%
+arrange(topic, -beta)
+
+top_terms %>%
+mutate(term = reorder(term, beta)) %>%
+ggplot(aes(term, beta, fill = factor(topic))) +
+geom_col(show.legend = FALSE) +
+facet_wrap(~ topic, scales = "free") +
+coord_flip()
+```
+
+> Topic 1: Movie-watching experience at Movie Magic:
+This topic focuses on the overall movie-watching experience at MovieMagic, encompassing the cinema environment, the excitement of going back to the theater, and the enjoyment of the MovieMagic experience. It captures the essence of what customers feel when they visit MovieMagic.
+
+>Topic 2: Magic on Screen:
+This topic centers around the love for movies, the quality of films, and the joy of watching them with friends. It highlights the satisfaction and enjoyment customers derive from the movie selection and the social aspect of going to the theater.
+
+>Topic 3: Offerings at MovieMagic:
+This topic emphasizes the food and beverage offerings at MovieMagic, including popcorn, beer, and the overall culinary experience. It reflects the idea that visiting MovieMagic is not only about watching movies but also about enjoying a variety of tasty options and having a good time.
+
+> From both the overall analysis and the regression study, we can discern three central themes. One prominent finding is that people's passion for movies significantly influences their propensity to spend on concessions. Therefore, the primary recommendation is to establish a loyalty program accessible to all movie enthusiasts, including older customers, to enhance concession sales. Another crucial suggestion involves issuing food coupons, particularly in light of the numerous negative reviews related to the quality of food. By offering coupons, MovieMagic can work towards altering customer perceptions and potentially converting these unfavorable reviews into positive ones.
+
+# Q8
+
+
+> Through the analysis, we have identified a correlation between the predictor variables and the output variable, with one strong negative association and three positive relationships. This suggests a potential causal link in this statistical analysis, drawing insights from customer information and provided reviews. However, it's important to acknowledge that various factors, such as data bias and external variables like trends, may influence this causal relationship. Also, the analysis will be impacted by the missing data/NAs which needs to be taken care of. To distinguish causation from correlation, MovieMagic could conduct an experiment to assess the practical impact of the recommendations derived from the analysis.
+
+> The experiment could take the form of an A/B test, where one group of customers receives the recommended loyalty program while the other does not. By comparing how the amount spent on concessions varies between these groups, MovieMagic can gain a clearer understanding of the impact of the loyalty program. Subsequently, an ANOVA analysis can be applied to the results to determine the causative factors influencing the outcome variable.
+
+
